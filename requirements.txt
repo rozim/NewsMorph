@@ -1,0 +1,7 @@
+absl-py
+feedparser
+requests
+requests-cache
+sqlitedict
+Pillow
+markdown

@@ -1,0 +1,13 @@
+BODY {
+    background-color: black
+}
+
+
+a {
+    color: #EEE;
+    text-decoration: none;
+}
+
+.sm {
+    font-size: 90%;
+}
