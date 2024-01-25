@@ -1,7 +1,11 @@
+Pillow
 absl-py
 feedparser
+markdown
+numpy
+ollama
 requests
 requests-cache
+scikit-learn
+diskcache
 sqlitedict
-Pillow
-markdown
