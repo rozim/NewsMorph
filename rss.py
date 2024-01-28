@@ -35,20 +35,20 @@ flags.DEFINE_string('outdir', 'site', 'Output directory')
 # https://platform.stability.ai/docs/api-reference#tag/v1generation/operation/textToImage
 
 RSS_FEEDS = [
-    'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
-    'https://rss.nytimes.com/services/xml/rss/nyt/Americas.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/Science.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/Health.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/Arts.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/MostEmailed.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/MostShared.xml',
-    # 'https://rss.nytimes.com/services/xml/rss/nyt/MostViewed.xml'
-  ]
+  'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Americas.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Science.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Health.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Arts.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/MostEmailed.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/MostShared.xml',
+  'https://rss.nytimes.com/services/xml/rss/nyt/MostViewed.xml'
+]
 
 
 
