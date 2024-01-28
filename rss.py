@@ -194,9 +194,12 @@ def do_feed_entry(entry, logf):
 
   for prompt in tqdm.tqdm(rnd.sample(prompts, FLAGS.num_prompts), leave=False):
     t1 = time.time()
-    paths = generate_images(prompt)
-    logf.write(f'\t\tdt: {time.time() - t1:.1f}s\n')
-    yield (prompt, paths)
+    try:
+      paths = generate_images(prompt)
+      logf.write(f'\t\tdt: {time.time() - t1:.1f}s\n')
+      yield (prompt, paths)
+    except Exception as e:
+      logf.write('\t\tFAIL: {e}')
 
 
 
