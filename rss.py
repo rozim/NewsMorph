@@ -2,6 +2,7 @@
 from PIL import Image
 
 import base64
+import dataclasses
 import html
 import itertools
 import os
@@ -33,7 +34,24 @@ flags.DEFINE_string('outdir', 'site', 'Output directory')
 # Docs
 # https://platform.stability.ai/docs/api-reference#tag/v1generation/operation/textToImage
 
-rss_url = 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'
+RSS_FEEDS = [
+    'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Americas.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/Science.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/Health.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/Arts.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/MostEmailed.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/MostShared.xml',
+    # 'https://rss.nytimes.com/services/xml/rss/nyt/MostViewed.xml'
+  ]
+
+
+
 # url = 'World.xml'
 
 # Stability.ai
@@ -123,7 +141,7 @@ def generate_images(prompt: str, samples=1):
   )
 
   if response.status_code != 200:
-    raise Exception("Non-200 response: " + str(response.text))
+    raise Exception("Non-200 response: " + str(response.text) + "response: " + str(response) + " prompt: " + prompt)
 
   data = response.json()
 
@@ -174,7 +192,7 @@ def do_feed_entry(entry, logf):
       f"Diagram for news: {what}",
     ])
 
-  for prompt in rnd.sample(prompts, FLAGS.num_prompts):
+  for prompt in tqdm.tqdm(rnd.sample(prompts, FLAGS.num_prompts), leave=False):
     t1 = time.time()
     paths = generate_images(prompt)
     logf.write(f'\t\tdt: {time.time() - t1:.1f}s\n')
@@ -191,19 +209,33 @@ def escape_str(s):
   return html.escape(s)
 
 
-def do_feed(url: str, logf):
+@dataclasses.dataclass
+class Entry:
+  title: str
+  summary: str
+  url: str
+
+def get_all_feed_entries():
   global requests_rss
 
-  logf.write(f'FEED: {url}\n')
-  feed = feedparser.parse(requests_rss.get(rss_url).text)
-  logf.write(f'\tTITLE: "{feed.feed.title}"\n')
+  entries = []
+  for url in tqdm.tqdm(RSS_FEEDS):
+    feed = feedparser.parse(requests_rss.get(url).text)
+    for entry in feed.entries:
+      entries.append(Entry(title=entry.title,
+                           summary=entry.summary,
+                           url=entry.link # TBD, may need to look at alt href for washpost
+                           ))
+  return entries
+
+
+def do_feed(entries : list[Entry], logf):
+  global requests_rss
 
   body = []
-  it = iter(itertools.islice(feed.entries, FLAGS.max_entries))
-  for i in tqdm.trange(FLAGS.max_entries):
-    entry = next(it)
+  for i, entry in enumerate(tqdm.tqdm(entries)):
     title = entry.title
-    url = entry.link # TBD, may need to look at alt href for washpost
+    url = entry.url
     summary = entry.summary
     logf.flush()
     logf.write(f'\tENTRY {i}. "{title}" | "{summary}" | {url}\n')
@@ -230,13 +262,8 @@ def do_feed(url: str, logf):
   return '\n'.join(body)
 
 
-def main(_):
-  global API_KEY
+def install_caches():
   global requests_rss, requests_stability_ai
-  assert os.path.isdir(FLAGS.outdir)
-
-  shutil.copy2('style.css', FLAGS.outdir)
-
   hour_session = requests_cache.CachedSession('http_cache_hour',
                                               expire_after=3600,
                                               allowable_methods=('GET', 'POST'))
@@ -248,13 +275,22 @@ def main(_):
   requests_rss = hour_session
   requests_stability_ai = month_session
 
+def main(_):
+  global API_KEY
+
+  assert os.path.isdir(FLAGS.outdir)
+  install_caches()
+  shutil.copy2('style.css', FLAGS.outdir)
+  entries = get_all_feed_entries()
+  entries = secrets.SystemRandom().sample(entries, FLAGS.max_entries)
+
 
   # requests_cache.install_cache(expire_after=3600, allowable_methods=('GET', 'POST'))
   with open(os.path.expanduser("~/.stability.ai.secret.txt"), 'r') as f:
     API_KEY = f.read().strip()
 
   with open(os.path.join(FLAGS.outdir, 'log.txt'), 'w') as logf:
-    body = do_feed(rss_url, logf)
+    body = do_feed(entries, logf)
     with open(os.path.join(FLAGS.outdir, 'index.html'), 'w') as fp:
       fp.write(HTML5.format(title='newsmorph', body=body))
 
