@@ -160,3 +160,8 @@ cython_debug/
 #.idea/
 
 http_cache.sqlite
+*~
+ollama_cache
+shh
+#*#
+site/

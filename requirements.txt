@@ -9,3 +9,4 @@ requests-cache
 scikit-learn
 diskcache
 sqlitedict
+tqdm
