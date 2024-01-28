@@ -55,6 +55,9 @@ HTML5 = """
 </html>
 """
 
+requests_rss = None
+requests_stability_ai = None
+
 def strip_dir_prefix(s, pre):
   assert s.startswith(pre)
   return s[len(pre) + 1:] # +1 -> slash
@@ -94,8 +97,9 @@ def normalize_filename(string):
 def generate_images(prompt: str, samples=1):
   """Generate image from prompt, return path."""
   global API_KEY
+  global requests_stability_ai
 
-  response = requests.post(
+  response = requests_stability_ai.post(
     f"{API_HOST}/v1/generation/{ENGINE_ID}/text-to-image",
     headers={
       "Content-Type": "application/json",
@@ -173,7 +177,7 @@ def do_feed_entry(entry, logf):
   for prompt in rnd.sample(prompts, FLAGS.num_prompts):
     t1 = time.time()
     paths = generate_images(prompt)
-    logf.write(f'\t\t{time.time() - t1:.1f}s\n')
+    logf.write(f'\t\tdt: {time.time() - t1:.1f}s\n')
     yield (prompt, paths)
 
 
@@ -181,13 +185,17 @@ def do_feed_entry(entry, logf):
 def escape_url(url):
   return html.escape(url, quote=True)
 
+
 def escape_str(s):
   assert s is not None
   return html.escape(s)
 
+
 def do_feed(url: str, logf):
+  global requests_rss
+
   logf.write(f'FEED: {url}\n')
-  feed = feedparser.parse(requests.get(rss_url).text)
+  feed = feedparser.parse(requests_rss.get(rss_url).text)
   logf.write(f'\tTITLE: "{feed.feed.title}"\n')
 
   body = []
@@ -224,11 +232,24 @@ def do_feed(url: str, logf):
 
 def main(_):
   global API_KEY
+  global requests_rss, requests_stability_ai
   assert os.path.isdir(FLAGS.outdir)
 
   shutil.copy2('style.css', FLAGS.outdir)
 
-  requests_cache.install_cache(expire_after=3600, allowable_methods=('GET', 'POST'))
+  hour_session = requests_cache.CachedSession('http_cache_hour',
+                                              expire_after=3600,
+                                              allowable_methods=('GET', 'POST'))
+
+  month_session = requests_cache.CachedSession('http_cache_month',
+                                              expire_after=(30 * 24 * 3600),
+                                              allowable_methods=('GET', 'POST'))
+
+  requests_rss = hour_session
+  requests_stability_ai = month_session
+
+
+  # requests_cache.install_cache(expire_after=3600, allowable_methods=('GET', 'POST'))
   with open(os.path.expanduser("~/.stability.ai.secret.txt"), 'r') as f:
     API_KEY = f.read().strip()
 
