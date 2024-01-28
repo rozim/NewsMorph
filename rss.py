@@ -3,9 +3,13 @@ from PIL import Image
 
 import base64
 import html
+import itertools
 import os
 import re
 import secrets
+import shutil
+import time
+import traceback
 
 import sys
 
@@ -17,12 +21,14 @@ import feedparser
 
 import requests
 import requests_cache
-import sqlitedict
+
+import tqdm
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('max_entries', 15, '')
 flags.DEFINE_integer('num_prompts', 6, '')
+flags.DEFINE_string('outdir', 'site', 'Output directory')
 
 # Docs
 # https://platform.stability.ai/docs/api-reference#tag/v1generation/operation/textToImage
@@ -30,6 +36,7 @@ flags.DEFINE_integer('num_prompts', 6, '')
 rss_url = 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'
 # url = 'World.xml'
 
+# Stability.ai
 ENGINE_ID = "stable-diffusion-v1-6"
 API_HOST = os.getenv('API_HOST', 'https://api.stability.ai')
 API_KEY = None
@@ -48,17 +55,21 @@ HTML5 = """
 </html>
 """
 
+def strip_dir_prefix(s, pre):
+  assert s.startswith(pre)
+  return s[len(pre) + 1:] # +1 -> slash
+
 def shrink_image(path):
-  path = path[:200] # Avoid path limit.
+  # path = path[:200] # Avoid path limit.
   goal = '_512x512.png'
   if not path.endswith(goal):
+    assert False, (path, goal)
     return None
   img = Image.open(path)
   path2 = path[:-len(goal)] + "_256x256.png"
   img2 = img.resize((256, 256))
   img2.save(path2)
   return path2
-
 
 def normalize_filename(string):
   """Normalizes a string to a valid file name, ensuring only a single underscore between words."""
@@ -77,7 +88,7 @@ def normalize_filename(string):
   # Replace repeated underscores with a single one
   normalized = re.sub(r"_+", "_", normalized)
 
-  return normalized
+  return normalized[:200] # avoid file len problems
 
 
 def generate_images(prompt: str, samples=1):
@@ -114,14 +125,14 @@ def generate_images(prompt: str, samples=1):
 
   paths = []
   for i, image in enumerate(data["artifacts"]):
-    path = "images/" + normalize_filename(prompt) + f"_{i}_512x512.png"
+    path = os.path.join(FLAGS.outdir, "images", normalize_filename(prompt) + f"_{i}_512x512.png")
     paths.append(path)
     with open(path, "wb") as f:
       f.write(base64.b64decode(image["base64"]))
   return paths
 
 
-def do_feed_entry(entry):
+def do_feed_entry(entry, logf):
   global API_KEY
 
   rnd = secrets.SystemRandom()
@@ -160,8 +171,9 @@ def do_feed_entry(entry):
     ])
 
   for prompt in rnd.sample(prompts, FLAGS.num_prompts):
-    print(prompt)
+    t1 = time.time()
     paths = generate_images(prompt)
+    logf.write(f'\t\t{time.time() - t1:.1f}s\n')
     yield (prompt, paths)
 
 
@@ -170,51 +182,60 @@ def escape_url(url):
   return html.escape(url, quote=True)
 
 def escape_str(s):
+  assert s is not None
   return html.escape(s)
 
-def do_feed(url: str):
+def do_feed(url: str, logf):
+  logf.write(f'FEED: {url}\n')
   feed = feedparser.parse(requests.get(rss_url).text)
-  print("Feed title:", feed.feed.title)
-  body = []
-  for i, entry in enumerate(feed.entries):
-    # print("Title:", entry.title)
-    # print("Link:", entry.link)
-    # print("Summary:", entry.summary)
+  logf.write(f'\tTITLE: "{feed.feed.title}"\n')
 
+  body = []
+  it = iter(itertools.islice(feed.entries, FLAGS.max_entries))
+  for i in tqdm.trange(FLAGS.max_entries):
+    entry = next(it)
     title = entry.title
-    url = entry.link
+    url = entry.link # TBD, may need to look at alt href for washpost
     summary = entry.summary
+    logf.flush()
+    logf.write(f'\tENTRY {i}. "{title}" | "{summary}" | {url}\n')
+
     body.append(f'<a href="{escape_url(url)}">{escape_str(title)}</a>')
     body.append('<br/>')
     body.append(f'<a href="{escape_url(url)}"><em class=sm>{escape_str(summary)}</em></a>')
     body.append('<br/>')
-    try:
-      for (prompt, paths) in do_feed_entry(entry):
-        for p in paths:
-          sm = shrink_image(p)
-          body.append(f'<a href="{p}"><img width=256 height=256 border=0 title="{escape_str(prompt)}" src="{escape_str(sm)}"></a>')
-    except Exception as e:
-      print("OUCH: ", e)
-      pass
+
+    # Generate images
+    prompt, paths = None, None
+    for (prompt, paths) in do_feed_entry(entry, logf):
+      logf.write(f'\t\tIMAGE "{prompt}" -> {paths}\n')
+      for p in paths:
+        sm = shrink_image(p)
+        assert prompt is not None
+        assert sm is not None
+        p = strip_dir_prefix(escape_str(p), FLAGS.outdir)
+        body.append(f'<a href="{p}"><img width=256 height=256 border=0 title="{escape_str(prompt)}" src="{strip_dir_prefix(escape_str(sm), FLAGS.outdir)}"></a>')
+    logf.write('\n')
     body.append('<br/>')
     body.append('<p>')
     body.append("")
-    if i >= FLAGS.max_entries:
-      break
   return '\n'.join(body)
 
 
 def main(_):
   global API_KEY
+  assert os.path.isdir(FLAGS.outdir)
+
+  shutil.copy2('style.css', FLAGS.outdir)
+
   requests_cache.install_cache(expire_after=3600, allowable_methods=('GET', 'POST'))
   with open(os.path.expanduser("~/.stability.ai.secret.txt"), 'r') as f:
     API_KEY = f.read().strip()
 
-  body = do_feed(rss_url)
-  with open('index.html', 'w') as fp:
-    fp.write(HTML5.format(title='newsmorph', body=body))
-
-
+  with open(os.path.join(FLAGS.outdir, 'log.txt'), 'w') as logf:
+    body = do_feed(rss_url, logf)
+    with open(os.path.join(FLAGS.outdir, 'index.html'), 'w') as fp:
+      fp.write(HTML5.format(title='newsmorph', body=body))
 
 
 if __name__ == '__main__':
