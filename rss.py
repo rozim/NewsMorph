@@ -256,8 +256,25 @@ def do_feed(entries : list[Entry], logf):
         sm = shrink_image(p)
         assert prompt is not None
         assert sm is not None
+        goal = '_256x256.png'
+        assert sm.endswith(goal)
+        html_base_fn = normalize_filename(prompt) + '.html'
+        html_fn = os.path.join(FLAGS.outdir, html_base_fn)
         p = strip_dir_prefix(escape_str(p), FLAGS.outdir)
-        body.append(f'<a href="{p}"><img width=256 height=256 border=0 title="{escape_str(prompt)}" src="{strip_dir_prefix(escape_str(sm), FLAGS.outdir)}"></a>')
+        logf.write(f'HTML: {html_fn}\n')
+        logf.write(f'HTML/p: {p}\n')
+        with open(html_fn, 'w') as fp:
+          ibody = []
+          ibody.append(f'<a href="{escape_url(url)}">{escape_str(title)}</a>')
+          ibody.append('<br/>')
+          ibody.append(f'<a href="{escape_url(url)}"><em class=sm>{escape_str(summary)}</em></a>')
+          ibody.append('<br/>')
+          ibody.append(f'Prompt: {prompt}<br>\n')
+          ibody.append('\n')
+          ibody.append(f'<img src="{p}" width=512 height=512>\n')
+
+          fp.write(HTML5.format(title=escape_str(prompt), body='\n'.join(ibody)))
+        body.append(f'<a href="{html_base_fn}"><img width=256 height=256 border=0 title="{escape_str(prompt)}" src="{strip_dir_prefix(escape_str(sm), FLAGS.outdir)}"></a>')
     logf.write('\n')
     body.append('<br/>')
     body.append('<p>')
