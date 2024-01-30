@@ -10,3 +10,4 @@ scikit-learn
 diskcache
 sqlitedict
 tqdm
+llama-cpp-python
